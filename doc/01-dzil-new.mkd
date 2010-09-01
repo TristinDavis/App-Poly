@@ -1,0 +1,128 @@
+# Setting up the App::Poly dist with Dist::Zilla
+
+So one of my goals with this effort is to get a better understanding of the (relatively) new Perl module distribution management tool, [Dist::Zilla][1]. Dzil (as the cool kids call it) comes with this cool "choose your own adventure" style tutorial, so I spent a little time working through that, and found out that I needed to run:
+
+[1]: http://dzil.org/
+
+    dzil setup
+
+And then answer the resulting questions:
+
+    $ dzil setup
+    <span style="text-decoration:underline">What's your name?</span> John SJ Anderson
+    <span style="text-decoration:underline">What's your email address?</span> genehack@genehack.org
+    <span style="text-decoration:underline">Who, by default, holds the copyright on your code?</span>  [John SJ Anderson]: 
+    <span style="text-decoration:underline">What license will you use by default (Perl_5, BSD, etc.)?</span>  [Perl_5]: 
+    <span style="text-decoration:underline">Do you want to enter your PAUSE account details?</span>  [y/N]: 
+    config.ini file created!
+
+
+(I just took the defaults in most cases...)
+
+The `config.ini` file that was generated looks like:
+
+    $ cat .dzil/config.ini 
+    [%User]
+    name  = John SJ Anderson
+    email = genehack@genehack.org
+    
+    [%Rights]
+    license_class    = Perl_5
+    copyright_holder = John SJ Anderson
+
+Which is pretty straight forward. Once I had this set up, I could generate the skeleton for the dist and set up source code control by simply doing:
+
+    $ dzil new App::Poly
+    [DZ] making target dir /Users/genehack/App-Poly
+    [DZ] writing files to /Users/genehack/App-Poly
+    [DZ] dist minted in ./App-Poly
+    
+    $ cd App-Poly/
+    
+    $ git init
+    Initialized empty Git repository in /Users/genehack/App-Poly/.git/
+
+    $ git add .
+
+    $ git ci -m"inital checkin - ran 'dzil new App::Poly'"
+    [master (root-commit) 1c263ed] inital checkin - ran 'dzil new App::Poly'
+     2 files changed, 11 insertions(+), 0 deletions(-)
+     create mode 100644 dist.ini
+     create mode 100644 lib/App/Poly.pm
+
+Let's see if we can make a dist:
+
+    $ dzil build
+    [DZ] beginning to build App-Poly
+    [DZ] no version was ever set
+    [DZ] no version was ever set at /opt/perl/perls/perl-5.12.1/lib/site_perl/5.12.1/darwin-2level/Moose/Meta/Method/Delegation.pm line 108
+
+Opps, clearly some more configuration is in order. From looking at [the tutorial page on versioning][2], it looks like [the thing to do][3] is to use the [BumpVersionFromGit][4] plugin, which will handle this automatically. So, update `dzil.ini` to look like so:
+
+[2]: http://dzil.org/tutorial/versioning.html
+[3]: http://dzil.org/tutorial/versioning.html#Version-Numbering-from-Git
+[4]: http://search.cpan.org/~dagolden/Dist-Zilla-Plugin-BumpVersionFromGit/lib/Dist/Zilla/Plugin/BumpVersionFromGit.pm
+
+    name    = App-Poly
+    author  = John SJ Anderson <genehack@genehack.org>
+    license = Perl_5
+    copyright_holder = John SJ Anderson
+    copyright_year   = 2010
+
+    [BumpVersionFromGit]
+
+and now running `dzil build` ... gives another error. 
+
+    $ dzil build
+    [DZ] beginning to build App-Poly
+    [DZ] Unable to find main_module in dist
+    [DZ] Unable to find main_module in dist at /opt/perl/perls/perl-5.12.1/lib/site_perl/5.12.1/darwin-2level/Moose/Meta/Method/Delegation.pm line 108
+
+I hunted around in the tutorial some more, and in the [page on converting an existing dist][5], I found a number of additional configuration lines that looked like they might be useful -- so I added them, meaning `dist.ini` now looks like:
+
+[5]: http://dzil.org/tutorial/convert-dist.html
+
+    name    = App-Poly
+    author  = John SJ Anderson <genehack@genehack.org>
+    license = Perl_5
+    copyright_holder = John SJ Anderson
+    copyright_year   = 2010
+
+    [GatherDir]
+    [MetaYAML]
+    [MakeMaker]
+    [Manifest]
+
+    [BumpVersionFromGit]
+
+and I've got yet another (*more informative!*) error:
+
+    $ dzil build
+    [DZ] beginning to build App-Poly
+    [DZ] guessing dist's main_module is lib/App/Poly.pm
+    [DZ] extracting distribution abstract from lib/App/Poly.pm
+    Unable to extract an abstract from lib/App/Poly.pm. Please add the following comment to the file with your abstract:
+        # ABSTRACT: turns baubles into trinkets
+
+Once I add an abstract line to `lib/App/Poly.pm`, the build works!
+
+    $ dzil build
+    [DZ] beginning to build App-Poly
+    [DZ] guessing dist's main_module is lib/App/Poly.pm
+    [DZ] extracting distribution abstract from lib/App/Poly.pm
+    [DZ] writing App-Poly in App-Poly-0.001
+    [DZ] writing archive to App-Poly-0.001.tar.gz
+
+In addition to the dist tarball, the build process also left behind the uncompressed dist tree -- and while I can see how that could be useful, I don't want to have to deal with accidentally adding any of that stuff to git at some point down the road. `.gitignore` to the rescue:
+
+    $ echo 'App-Poly-*' > .gitignore
+    
+    $ cat .gitignore
+    App-Poly-*
+
+And now git ignores both the dist tarball and the dist directory tree.
+
+(If I run `dzil build` again, it doesn't increment the version number. It looks like I'm going to need to add the [Git::Tag][6] plugin to get things to work the way I expect -- let's save that for next time.)
+
+[6]: http://search.cpan.org/~jquelin/Dist-Zilla-Plugin-Git/lib/Dist/Zilla/Plugin/Git/Tag.pm
+
