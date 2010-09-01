@@ -1,0 +1,3 @@
+# The Kioku model class
+
+gank second half of http://blog.woobling.org/2009/05/using-kiokudb-in-catalyst-applications.html
