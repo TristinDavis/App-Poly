@@ -1,0 +1,30 @@
+# A bit more Dist::Zilla configuration
+
+## Additional plugins 
+
+read the rest of http://dzil.org/tutorial/convert-dist.html, update dist.ini to
+
+    name    = App-Poly
+    author  = John SJ Anderson <genehack@genehack.org>
+    license = Perl_5
+    copyright_holder = John SJ Anderson
+    copyright_year   = 2010
+    
+    [@Basic]
+    
+    [PodSyntaxTests]
+    [PodCoverageTests]
+    [CriticTests]
+    [AutoPrereq]
+    
+    [BumpVersionFromGit]
+
+## Documentation Plugins 
+
+http://dzil.org/tutorial/writing-docs.html
+
+## Additional git plugins
+
+http://dzil.org/tutorial/vcs-git.html
+http://search.cpan.org/~jquelin/Dist-Zilla-Plugin-Git-1.102430/lib/Dist/Zilla/PluginBundle/Git.pm
+
