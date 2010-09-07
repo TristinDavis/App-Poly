@@ -7,11 +7,11 @@ So one of my goals with this effort is to get a better understanding of the (rel
 And then answer the resulting questions:
 
     $ dzil setup
-    <span style="text-decoration:underline">What's your name?</span> John SJ Anderson
-    <span style="text-decoration:underline">What's your email address?</span> genehack@genehack.org
-    <span style="text-decoration:underline">Who, by default, holds the copyright on your code?</span>  [John SJ Anderson]: 
-    <span style="text-decoration:underline">What license will you use by default (Perl_5, BSD, etc.)?</span>  [Perl_5]: 
-    <span style="text-decoration:underline">Do you want to enter your PAUSE account details?</span>  [y/N]: 
+    What's your name? John SJ Anderson
+    What's your email address? genehack@genehack.org
+    Who, by default, holds the copyright on your code?  [John SJ Anderson]:
+    What license will you use by default (Perl_5, BSD, etc.)?  [Perl_5]:
+    Do you want to enter your PAUSE account details?  [y/N]:
     config.ini file created!
 
 (Obviously, I just took the defaults in most cases...)
