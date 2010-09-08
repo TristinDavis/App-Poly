@@ -1,8 +1,6 @@
 # A bit more Dist::Zilla configuration
 
-## Additional plugins 
-
-read the rest of http://dzil.org/tutorial/convert-dist.html, update dist.ini to
+After reading over the rest of the [tutorial on converting an existing dist to Dist::Zilla][tutorial-convert], I made a few more changes to my `dist.ini`. In the end, it ended up looking like:
 
     name    = App-Poly
     author  = John SJ Anderson <genehack@genehack.org>
@@ -19,12 +17,58 @@ read the rest of http://dzil.org/tutorial/convert-dist.html, update dist.ini to
     
     [BumpVersionFromGit]
 
-## Documentation Plugins 
+I carried on reading the [tutorial on having dzil write docs for you][tutorial-docs], which lead to me adding the [Podweaver plugin][podweaver-plugin] to `dist.ini`. I also added a `weaver.ini` file as described in the [tutorial][tutorial-docs]. (In order to make this work, I needed to install the `Dist::Zilla::Plugin::PodWeaver` and `Pod::Elemental::Transformer::List` modules.)
 
-http://dzil.org/tutorial/writing-docs.html
+Finally, I read the [tutorial on integrating Git with Dist::Zilla][tutorial-git], installed the [Dist::Zilla::PluginBundle::Git module][git-plugin], and added `[@Git]` to my `dist.ini`. 
 
-## Additional git plugins
+With all of these changes, now when I run `dzil release`, the following happens:
 
-http://dzil.org/tutorial/vcs-git.html
-http://search.cpan.org/~jquelin/Dist-Zilla-Plugin-Git-1.102430/lib/Dist/Zilla/PluginBundle/Git.pm
+    $ dzil release
+    [DZ] beginning to build App-Poly
+    [DZ] guessing dist's main_module is lib/App/Poly.pm
+    [DZ] extracting distribution abstract from lib/App/Poly.pm
+    [@Basic/ExtraTests] rewriting release test xt/release/pod-syntax.t
+    [@Basic/ExtraTests] rewriting release test xt/release/pod-coverage.t
+    [@Basic/ExtraTests] rewriting author test xt/author/critic.t
+    [DZ] writing App-Poly in App-Poly-0.001
+    [DZ] writing archive to App-Poly-0.001.tar.gz
+    [@Git/Check] branch master has some uncommitted files:
+    [@Git/Check]    doc/02-more-dzil-config.mkd
 
+Awesome! When I go to do a release, it won't let me, because there are outstanding changes in the tree. Once I check that in: 
+
+    $ dzil release
+    [DZ] beginning to build App-Poly
+    [DZ] guessing dist's main_module is lib/App/Poly.pm
+    [DZ] extracting distribution abstract from lib/App/Poly.pm
+    [@Basic/ExtraTests] rewriting release test xt/release/pod-syntax.t
+    [@Basic/ExtraTests] rewriting release test xt/release/pod-coverage.t
+    [@Basic/ExtraTests] rewriting author test xt/author/critic.t
+    [DZ] writing App-Poly in App-Poly-0.001
+    [DZ] writing archive to App-Poly-0.001.tar.gz
+    [@Git/Check] branch master is in a clean state
+    [@Basic/TestRelease] Extracting /Users/genehack/proj/App-Poly/App-Poly-0.001.tar.gz to .build/HA1JeTypg0
+    Checking if your kit is complete...
+    Looks good
+    Writing Makefile for App::Poly
+    cp lib/App/Poly.pm blib/lib/App/Poly.pm
+    Manifying blib/man3/App::Poly.3
+    PERL_DL_NONLAZY=1 /opt/perl/perls/perl-5.12.2/bin/perl "-MExtUtils::Command::MM" "-e" "test_harness(0, 'blib/lib', 'blib/arch')" t/*.t
+    t/author-critic.t ......... skipped: these tests are for testing by the author
+    t/release-pod-coverage.t .. ok
+    t/release-pod-syntax.t .... ok
+    All tests successful.
+    Files=3, Tests=2,  0 wallclock secs ( 0.03 usr  0.01 sys +  0.15 cusr  0.03 csys =  0.22 CPU)
+    Result: PASS
+    [@Basic/TestRelease] all's well; removing .build/HA1JeTypg0
+    *** Preparing to upload App-Poly-0.001.tar.gz to CPAN ***
+
+And at that point, if I've got my PAUSE credentials in the config, it does in fact upload the release. It also tags the tree with the release version (which is what lets the version number be incremented on subsequent releases...)
+
+So, now that we've got a decent dzil config in place, let's write some code...
+
+[git-plugin]: http://search.cpan.org/~jquelin/Dist-Zilla-Plugin-Git/lib/Dist/Zilla/PluginBundle/Git.pm
+[podweaver-plugin]: http://search.cpan.org/~rjbs/Pod-Weaver/lib/Pod/Weaver.pm
+[tutorial-convert]: http://dzil.org/tutorial/convert-dist.html
+[tutorial-docs]: http://dzil.org/tutorial/writing-docs.html
+[tutorial-git]: http://dzil.org/tutorial/vcs-git.html
