@@ -1,0 +1,4 @@
+# The Schema
+
+lay out the overview of all the Kioku schema classes, how they integrate, and what helper functions you put in the model
+
