@@ -1,3 +1,168 @@
 # The Kioku model class
 
-gank second half of http://blog.woobling.org/2009/05/using-kiokudb-in-catalyst-applications.html
+Okay, we've got enough of the Schema objects set up to be able to create users and give them accounts on different services (albeit accounts that don't actually do anything). Let's tie this to persistent storage via `KiokuDB`. 
+
+Like last time, I'm going to be heavily borrowing from [Nothingmuch's intro to using KiokuDB in Catalyst applications][kiokudb-with-cat] post here -- you may want to jump over and read that before continuing.
+
+Hooking our existing Schema classes up to a KiokuDB model is actually very easy, thanks to `KiokuX::Model` -- all we need is a thin wrapper that looks like this:
+
+    package App::Poly::Model::KiokuDB;
+    use Moose;
+    extends 'KiokuX::Model';
+    
+    __PACKAGE__->meta->make_immutable;
+    1;
+
+Really, that's it! 
+
+Once we have this model class, we need some tests. I put the following in `t/kiokudb_model.t`:
+
+    #! perl
+    
+    use strict;
+    use warnings;
+    
+    use Test::More;
+
+    use App::Poly::Schema::User;
+    use KiokuX::User::Util qw/ crypt_password /;
+    
+    use_ok 'App::Poly::Model::KiokuDB';
+
+    # the 'hash' DSN just stores stuff in a RAM-based way     
+    my $m = App::Poly::Model::KiokuDB->new( dsn => 'hash' );
+    
+    {
+      my $s = $m->new_scope;
+    
+      my $user = App::Poly::Schema::User->new({
+        id       => 'user1' ,
+        email    => 'user1@example.com' ,
+        password => crypt_password( 'bad_password' ),
+      });
+
+      my $id = $m->txn_do(
+        sub { $m->store($user) }
+      );
+
+      isa_ok( $user , 'App::Poly::Schema::User' );
+    
+      my $user2 = $m->lookup( $id );
+      isa_ok( $user2 , 'App::Poly::Schema::User' );
+    
+      is_deeply( $user , $user2 , 'same thing' );
+    
+    }
+    
+    done_testing();
+
+When we run this, we can see that everything works as expected:
+
+    $ prove -lv t/kiokudb_model.t
+    t/kiokudb_model.t .. 
+    ok 1 - use App::Poly::Model::KiokuDB;
+    ok 2 - The object isa App::Poly::Schema::User
+    ok 3 - The object isa App::Poly::Schema::User
+    ok 4 - same thing
+    1..4
+    ok
+    All tests successful.
+    Files=1, Tests=4,  1 wallclock secs ( 0.03 usr  0.01 sys +  1.40 cusr  0.07 csys =  1.51 CPU)
+    Result: PASS
+
+Now, one of the reasons for having this Model layer is to have a place to put convenience methods -- and that bit where we create a `App::Poly::Schema::User` object and then manually store it is clearly someplace that could do with a bit of abstraction. Let's extend the Model class with the following method:
+
+    use App::Poly::Schema::User;
+    use KiokuX::User::Util qw/ crypt_password /;
+    
+    sub new_user {
+      my( $self , $user_hash ) = @_;
+    
+      defined $user_hash->{password}
+        or die "Need password";
+    
+      $user_hash->{password} = crypt_password( $user_hash->{password} );
+    
+      my $user = App::Poly::Schema::User->new( $user_hash );
+    
+      my $id = $self->txn_do(
+        sub { $self->store($user) }
+      );
+    
+      return $user;
+    }
+
+And then we can modify the test file so that the middle bits look like this:
+
+    {
+      my $s = $m->new_scope;
+    
+      my $user = $m->new_user({
+        id       => 'user1' ,
+        email    => 'user1@example.com' ,
+        password => 'bad_password' ,
+      });
+    
+      isa_ok( $user , 'App::Poly::Schema::User' );
+    
+      my $user2 = $m->lookup( $user->kiokudb_object_id );
+      isa_ok( $user2 , 'App::Poly::Schema::User' );
+    
+      is_deeply( $user , $user2 , 'same thing' );
+    
+    }
+
+Much nicer! Another place that could do with a bit of abstraction is adding an account to a user. We could manually create the `App::Poly::Schema::Account` object, call `$user->accounts->insert()`, and then manually store the `$user` so that the change gets persisted to storage -- or we could add something like this to the model:
+
+    sub add_account_to_user {
+      my( $self , $user , $account_hash ) = @_;
+    
+      my $account = $self->txn_do( sub {
+        my $account = $user->add_account( $account_hash );
+        $self->store( $user );
+        return $account;
+      });
+    
+      return $account;
+    }
+    
+This lets us re-use the `add_account` helper method from the `App::Poly::Schema::User` class, and handles persisting the `$user` object as well. To test this, add the following to the end of the scope block:
+
+    my $account = $m->add_account_to_user( $user , {
+      name  => 'twitter' ,
+      type  => 'Twitter' ,
+    });
+  
+    is( $account->name , 'twitter' , 'name' );
+    is( $account->type , 'Twitter' , 'type' );
+    is( $account->owner , $user , 'owner'  );
+    
+    is_deeply( [ $user->accounts->members ] , [ $account ] , 'one account' );
+    
+And now our tests look like:
+
+    $ prove -lv t/kioku_model.t 
+    t/kioku_model.t .. 
+    ok 1 - use App::Poly::Model::KiokuDB;
+    ok 2 - The object isa App::Poly::Schema::User
+    ok 3 - The object isa App::Poly::Schema::User
+    ok 4 - same thing
+    ok 5 - id
+    ok 6 - email
+    ok 7 - password
+    ok 8 - !password
+    ok 9 - no accounts
+    ok 10 - name
+    ok 11 - type
+    ok 12 - owner
+    ok 13 - one account
+    1..13
+    ok
+    All tests successful.
+    Files=1, Tests=13,  2 wallclock secs ( 0.03 usr  0.01 sys +  1.41 cusr  0.08 csys =  1.53 CPU)
+    Result: PASS
+
+And that seems like a good stopping place for this installment. Next up, we'll create the Catalyst application scaffold, and get basic sign-in/sign-out functionality up and working.
+
+[kiokudb-with-cat]: http://blog.woobling.org/2009/05/using-kiokudb-in-catalyst-applications.html
+
