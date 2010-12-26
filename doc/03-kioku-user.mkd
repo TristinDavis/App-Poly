@@ -1,3 +1,162 @@
 # Getting started with KiokuDB -- a User class
 
-gank first half of http://blog.woobling.org/2009/05/using-kiokudb-in-catalyst-applications.html
+Since App::Poly is going to be running on a server, it really needs to support some sort of authentication to restrict who can access it. That also opens up the possibility of having multiple users of the application, instead of just one -- which is a good thing.
+
+As an initial step then, we'll get the authentication part of the application up and working. As an initial step for _that_, we'll get the basic Moose-based classes for users and service accounts laid out. I'm going to be borrowing _very_ heavily from [Nothingmuch's intro to using KiokuDB in Catalyst applications][kiokudb-with-cat] post here -- you may want to jump over and read that before continuing.
+
+The first thing we need is a class for users -- let's call that  `App::Poly::Schema::User` (following the convention of putting the domain object classes into the `::Schema::` namespace, as explained in Nothingmuch's post linked above):
+
+    package App::Poly::Schema::User;
+    
+    use Moose;
+    with 'KiokuX::User';   # this gets us 'id' and 'password' attrs
+    
+    # these let us manipulate attrs that contain groups of stuff
+    use KiokuDB::Set;
+    use KiokuDB::Util qw/ set /;
+    
+    # we're going to use this to map 'name' to the 'id' attr
+    use MooseX::Aliases;
+    
+    # and this is an easy way to verify we're getting a valid email
+    use MooseX::Types::Email qw/ EmailAddress /;
+    
+    use namespace::autoclean;
+    
+    has '+id' => ( alias => 'name' );
+    
+    has email => (
+      isa      => EmailAddress ,
+      is       => 'ro' ,
+      required => 1 ,
+    );
+    
+    # this attr is going to contain info about all the services this
+    # user has configured -- i.e., there will be one for Twitter, one
+    # for Facebook, etc. 
+    has accounts => (
+      isa     => 'KiokuDB::Set' ,
+      is      => 'ro' ,
+      lazy    => 1 ,
+      default => sub { set() } ,
+    );
+    
+    __PACKAGE__->meta->make_immutable;
+    1;
+
+And just to make sure everything is okay, let's make a very simple test file: 
+
+    #!perl
+    
+    use strict;
+    use warnings;
+    
+    use Test::More;
+    use KiokuX::User::Util qw/ crypt_password /;
+    
+    use_ok 'App::Poly::Schema::User';
+    
+    my $user = App::Poly::Schema::User->new(
+      id       => 'user1' ,
+      email    => 'user1@example.com' ,
+      password => crypt_password( 'bad_password' ) ,
+    );
+    
+    isa_ok( $user , 'App::Poly::Schema::User' );
+    
+    is( $user->id , 'user1' , 'id' );
+    is( $user->name , 'user1' , 'name delegated to id' );
+    is( $user->email , 'user1@example.com' , 'email' );
+    
+    ok( $user->check_password( 'bad_password' ) , 'check password' );
+    ok( ! $user->check_password( 'wrong password' ), 'check wrong password' );
+    
+    is_deeply( [ $user->accounts->members ] , [] , 'no accounts' );
+    
+    done_testing();
+
+We can run that and verify that everything is working ok:
+
+    $ prove -lv
+    t/user.t .. 
+    ok 1 - use App::Poly::Schema::User;
+    ok 2 - The object isa App::Poly::Schema::User
+    ok 3 - id
+    ok 4 - name delegated to id
+    ok 5 - email
+    ok 6 - check password
+    ok 7 - check wrong password
+    ok 8 - no accounts
+    1..8
+    ok
+    All tests successful.
+    Files=1, Tests=8,  0 wallclock secs ( 0.03 usr  0.00 sys +  0.49 cusr  0.04 csys =  0.56 CPU)
+    Result: PASS
+
+Let's go ahead and create the base class for accounts -- as we move forward, we'll have to make subclasses specific for each type of service, but once we have the base class, we can expand the test suite just a bit:
+
+    package App::Poly::Schema::Account;
+    
+    use Moose;
+    
+    use App::Poly::Schema::User;
+    
+    use namespace::autoclean;
+    
+    has name => (
+      isa      => 'Str' ,
+      is       => 'ro' ,
+      required => 1 ,
+    );
+    
+    has owner => (
+      isa      => 'App::Poly::Schema::User' ,
+      is       => 'ro' ,
+      required => 1 ,
+    );
+    
+    has type => (
+      isa      => 'Str' ,
+      is       => 'ro' ,
+      required => 1 ,
+    );
+    
+    __PACKAGE__->meta->make_immutable;
+    1;
+
+At some point, we're going to want to constrain the 'type' so that it can only take on a limited number of values -- that is, only the values for services that we have support for. We also need a `posts` attribute to track posts associated with this account. For the moment, however, this will get us off the ground. 
+
+We also need a way to associate user objects with account objects. We could just call `$user->account->insert( $account_object )`, but that's sort of an ugly interface to have to deal with. Plus, there's no way to verify that the account `owner` attribute is the same as `$user`. Instead, let's make a little helper method in `App::Poly::Schema::User`:
+
+    sub add_account {
+      my( $self , $account_hash ) = @_;
+    
+      $account_hash->{owner} = $self;
+    
+      my $account = App::Poly::Schema::Account->new( $account_hash );
+    
+      $self->accounts->insert( $account );
+    
+      return $account;
+    }
+
+(Note that you'll need to add `use App::Poly::Schema::Account` to the file too.)
+
+And now that we have that, let's add some more to the `user.t` test file:
+
+    my $account = $user->add_account({
+      name  => 'twitter' ,
+      type  => 'Twitter' ,
+    });
+    
+    is( $account->name , 'twitter' , 'name' );
+    is( $account->type , 'Twitter' , 'type' );
+    is( $account->owner , $user , 'owner'  );
+    
+    is_deeply( [ $user->accounts->members ] , [ $account ] , 'one account' );
+
+And that seems like a pretty good place to stop and make a commit. Next we'll build a Model layer that will hook these Schema objects up to KiokuDB and allow us to store them to disk for later retrieval. 
+
+(*Aside:* I struggled for a while with the name of the attribute that I ended up calling 'accounts'. I think that name is somewhat confusing, as it's not immediately clear that these things correspond to accounts in external services. In fact, I considered using 'services' or 'external_accounts' instead -- rejecting the latter because of length and the former because it didn't seem any clearer. Suggestions about alternative names for this attribute are welcome.)
+
+[kiokudb-with-cat]: http://blog.woobling.org/2009/05/using-kiokudb-in-catalyst-applications.html
