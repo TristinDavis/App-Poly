@@ -179,10 +179,35 @@ Then we can set the `CATALYST_CONFIG_LOCAL_SUFFIX` environment variable to `test
     done_testing();
 
 
-{ TODO: set up test config that uses simple login methods; write tests }
+Running that shows that everything is working as expected:
 
-{ NEXT: allow dynamic user creation }
+    $ CATALYST_DEBUG=0 CATALYST_CONFIG_LOCAL_SUFFIX=test prove -lv t/catalyst_app.t 
+    t/catalyst_app.t .. Passing extra parameters to the constructor is deprecated, please use model_args at generated method (unknown origin) line 111
+    
+    ok 1 - use Catalyst::Test;
+    ok 2 - basic request works
+    ok 3 - at home page
+    ok 4 - request hello_user
+    ok 5 - redirect to login
+    ok 6 - login
+    ok 7 - redirect to /hello_user
+    ok 8 - see expected greeting
+    ok 9 - basic request works
+    ok 10 - at home page
+    ok 11 - request hello_user
+    ok 12 - go directly to hello_user
+    ok 13 - still see expected greeting
+    ok 14 - GET /logout
+    ok 15 - back at home page
+    ok 16 - request hello_user
+    ok 17 - redirect to login
+    1..17
+    ok
+    All tests successful.
+    Files=1, Tests=17,  4 wallclock secs ( 0.04 usr  0.01 sys +  3.08 cusr  0.18 csys =  3.31 CPU)
+    Result: PASS
 
+Not sure what the next installment is going to bring -- there's a lot of different areas that could be worked on at this point: fleshing out the Schema layer to actually support interacting with one or more services, cleaning up the test suite and shifting to use `Test::Class`, fleshing out the application layer to support user registration (dynamic creation of User objects, email verification, etc.) I need to think about which way to go; suggestions are welcome.  
 
 [nothingmuch-blog]: http://blog.woobling.org/2009/05/using-kiokudb-in-catalyst-applications.html
 [simplelogin]: http://search.cpan.org/dist/CatalystX-SimpleLogin/
