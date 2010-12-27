@@ -1,0 +1,16 @@
+Model::KiokuDB:
+  dsn: hash
+Plugin::Authentication:
+  realms:
+    default:
+      credential:
+        class: Password
+        password_field: password
+        password_type: clear
+      store:
+        class: Minimal
+        users:
+          bob:
+            password: bobpw
+          william:
+            password: billpw

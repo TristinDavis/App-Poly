@@ -18,6 +18,13 @@ sub default :Path {
     $c->response->status(404);
 }
 
+sub hello_user : Local Does('NeedsLogin') {
+  my ( $self, $c ) = @_;
+
+  my $username = $c->user->id;
+  $c->res->body("<h2>Hello, user $username!</h2>");
+}
+
 sub end : ActionClass('RenderView') {}
 
 __PACKAGE__->meta->make_immutable;
