@@ -1,3 +1,0 @@
-# Catalyst app
-
-generate the cat app and integrate the kioku model in it

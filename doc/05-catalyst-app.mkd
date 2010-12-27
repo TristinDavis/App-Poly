@@ -1,0 +1,189 @@
+# Catalyst app
+
+In this installment, we're going to set up the basic scaffolding for our Catalyst application, hook it to up our KiokuDB model (using `Catalyst::Model::KiokuDB`), and then get authentication working (using `CatalystX::SimpleLogin`). First things first: use `catalyst.pl` to generate the application scaffold: 
+
+    $ catalyst.pl App::Poly::Web
+    created "App-Poly-Web"
+    [ snip ]
+
+(As an aside, it would be really nice if `catalyst.pl` had a flag that meant "just generate the module files into the `./lib` directory" -- perhaps I'll hack on that one of these days...)
+
+The next step is to relocate things appropriately, moving them out of the `./App-Poly-Web` directory that was just created, and into the appropriate place(s). I also like to go through the generated files and clean them up at this point, removing a lot of the boilerplate commentary. `Dist::Zilla` will mostly add that back in for us as needed when we generating a dist, and I prefer to have things formatted slightly differently than the boilerplate anyway. I only kept one of the generated test scripts -- `t/01app.t` -- and I renamed it to `t/catalyst_app.t`. I also kept the `root` and `script` directories; everything else got deleted. Once all the re-arrangement and cleanup has been done, let's make sure the test runs okay:
+
+    $ CATALYST_DEBUG=0 prove -lv t/catalyst_app.t 
+    t/catalyst_app.t .. 
+    ok 1 - use Catalyst::Test;
+    ok 2 - Request should succeed
+    1..2
+    ok
+    All tests successful.
+    Files=1, Tests=2,  0 wallclock secs ( 0.03 usr  0.01 sys +  0.82 cusr  0.04 csys =  0.90 CPU)
+    Result: PASS
+
+(And this is a good point to check things into revision control.)
+
+The next step is to create a View class: 
+
+    $ ./script/app_poly_web_create.pl view TT TT
+     exists "/Users/genehack/proj/App-Poly/script/../lib/App/Poly/Web/View"
+     exists "/Users/genehack/proj/App-Poly/script/../t"
+    created "/Users/genehack/proj/App-Poly/script/../lib/App/Poly/Web/View/TT.pm"
+    created "/Users/genehack/proj/App-Poly/script/../t/view_TT.t"
+
+And it's always a good idea to run the generated test script to make sure everything actually works: 
+
+    $ prove -lv t/view_TT.t 
+    t/view_TT.t .. 
+    ok 1 - use App::Poly::Web::View::TT;
+    1..1
+    ok
+    All tests successful.
+    Files=1, Tests=1,  1 wallclock secs ( 0.03 usr  0.00 sys +  0.29 cusr  0.02 csys =  0.34 CPU)
+    Result: PASS
+
+(And this is another good place to make a commit...) 
+
+The next step is to set up authentication, using [CatalystX::SimpleLogin][simplelogin] -- the easiest way to do this is to work through [CatalystX::SimpleLogin::Manual][simplelogin-manual]. It's slightly out of date (there's an example that is clearly using non-Moose-based Catalyst controllers -- another "spare TUITs" project), but in general very easy to follow. Once you get done, you should verify that you can login with the simple password setup described in the manual. 
+
+(With basic authentication working, another commit would not be out of order.)
+
+After this, I introduced the Catalyst app to the KiokuDB Model layer, a la the [nothingmuch blog post][nothingmuch-blog] that I've been <strike>ripping off</strike> _inspired by_ for the past couple installments. This ends up being a very simple wrapper:
+
+    package App::Poly::Web::Model::KiokuDB;
+    use Moose;
+    
+    use App::Poly::Model::KiokuDB;
+    
+    BEGIN { extends qw(Catalyst::Model::KiokuDB) }
+    
+    has '+model_class' => ( default => "App::Poly::Model::KiokuDB" );
+    
+    __PACKAGE__->meta->make_immutable;
+    1;
+
+With the Catalyst application talking to the KiokuDB model, it's a good idea to do a quick test to verify that we can still login. In order to do that, we first need to create an actual database and put a user object into it, then configure the application to use that database for authentication, and manually verify that an action that requires a login works as expected. First, I wrote a quick-and-dirty script to create an `App::Poly::Schema::User` object and store it to a SQLite database (using `App::Poly::Model::KiokuDB`): 
+
+    #! /opt/perl/bin/perl
+    
+    use strict;
+    use warnings;
+    
+    use lib './lib';
+    use App::Poly::Model::KiokuDB;
+    
+    my $m = App::Poly::Model::KiokuDB->new(
+      dsn => 'dbi:SQLite:db/foo' ,
+      extra_args => { create => 1 } ,
+    );
+    
+    {
+      my $s = $m->new_scope;
+    
+      my $user = $m->new_user({
+        id       => 'bob' ,
+        email    => 'user1@example.com' ,
+        password => 'bobpw' ,
+      });
+    }
+
+I then modified the application configuration (in `app_poly_web.yaml`) to use the KiokuDB Model wrapper for authentication:
+
+    name: App::Poly::Web
+    Model::KiokuDB:
+      dsn: dbi:SQLite:__path_to(db/foo)__
+      extra_args:
+        create: 1
+    Plugin::Authentication:
+      realms:
+        default:
+          credential:
+            class: Password
+            password_type: self_check
+          store:
+            class: Model::KiokuDB
+            model_name: kiokudb
+
+Finally, I added a method to `App::Poly::Web::Controller::Root` that requires authentication (this based on the identically-named method from `CatalystX::SimpleLogin::Manual`; you should recognize this from the initial authentication set up that we did above):
+
+    sub hello_user : Local Does('NeedsLogin') {
+      my ( $self, $c ) = @_;
+      my $username = $c->user->id;
+      $c->res->body("<h2>Hello, user $username!</h2>");
+    }
+
+Once all this was in place, I ran the little helper script to initialize the database and create the test user, then started up the development Catalyst server and verified that I could log in as the 'bob' user, and that I saw 'Hello, user bob' after logging in and visiting the `http://localhost:3000/hello_user` URL. 
+
+It's nice to be able to manually verify that this all works as expected, but we also need to be able to do automated testing that requires authentication. It'll be a lot easier to manage that if we use a simpler authentication set up for testing. Luckily, Catalyst supports having different application configurations while doing testing, so we can fall back to the much simpler hash-based KiokuDB storage layer and the "minimal" authentication config, just by making a `app_poly_web_test.yaml` file that contains this:
+
+    Model::KiokuDB:
+      dsn: hash
+    Plugin::Authentication:
+      realms:
+        default:
+          credential:
+            class: Password
+            password_field: password
+            password_type: clear
+          store:
+            class: MinimalB
+            users:
+              bob:
+                password: bobpw
+              william:
+                password: billpw
+
+
+Then we can set the `CATALYST_CONFIG_LOCAL_SUFFIX` environment variable to `test`, and values in this configuration file will overload the base config. With this in place, we can convert `t/catalyst_app.t` over to use `Test::WWW::Mechanize::Catalyst` and verify that login is required to view `/hello_user`, that we get redirected on a good login, that we can logout, and so forth:
+
+    #!/usr/bin/env perl
+    use strict;
+    use warnings;
+    use Test::More;
+    use Test::WWW::Mechanize::Catalyst;
+    
+    BEGIN { use_ok 'Catalyst::Test', 'App::Poly::Web' }
+    
+    my $m = Test::WWW::Mechanize::Catalyst->new( catalyst_app => 'App::Poly::Web' );
+    
+    $m->get_ok( '/' , 'basic request works' );
+    is( $m->uri->path , '/' , 'at home page' );
+    
+    $m->get_ok( '/hello_user' , 'request hello_user' );
+    is( $m->uri->path , '/login' , 'redirect to login' );
+    
+    $m->submit_form_ok({
+      form_id => 'login_form' ,
+      fields => {
+        username => 'bob' ,
+        password => 'bobpw' ,
+      } ,
+      button => 'submit' ,
+    } , 'login' );
+    
+    is( $m->uri->path , '/hello_user' , 'redirect to /hello_user' );
+    $m->text_contains( 'Hello, user bob!' , 'see expected greeting' );
+    
+    $m->get_ok( '/' , 'basic request works' );
+    is( $m->uri->path , '/' , 'at home page' );
+    
+    $m->get_ok( '/hello_user' , 'request hello_user' );
+    is( $m->uri->path , '/hello_user' , 'go directly to hello_user' );
+    $m->text_contains( 'Hello, user bob!' , 'still see expected greeting' );
+    
+    $m->get_ok( '/logout' );
+    is( $m->uri->path , '/' , 'back at home page' );
+    
+    $m->get_ok( '/hello_user' , 'request hello_user' );
+    is( $m->uri->path , '/login' , 'redirect to login' );
+    
+    done_testing();
+
+
+{ TODO: set up test config that uses simple login methods; write tests }
+
+{ NEXT: allow dynamic user creation }
+
+
+[nothingmuch-blog]: http://blog.woobling.org/2009/05/using-kiokudb-in-catalyst-applications.html
+[simplelogin]: http://search.cpan.org/dist/CatalystX-SimpleLogin/
+[simplelogin-manual]: http://search.cpan.org/dist/CatalystX-SimpleLogin/lib/CatalystX/SimpleLogin/Manual.pod
