@@ -2,7 +2,7 @@ package App::Poly::Web::Controller::Root;
 use Moose;
 use namespace::autoclean;
 
-BEGIN { extends 'Catalyst::Controller' }
+BEGIN { extends 'Catalyst::Controller::ActionRole' }
 
 __PACKAGE__->config(namespace => '');
 
