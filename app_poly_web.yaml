@@ -1,1 +1,14 @@
 name: App::Poly::Web
+Model::KiokuDB:
+  dsn: dbi:SQLite:__path_to(db/foo)__
+  extra_args:
+    create: 1
+Plugin::Authentication:
+  realms:
+    default:
+      credential:
+        class: Password
+        password_type: self_check
+      store:
+        class: Model::KiokuDB
+        model_name: kiokudb
