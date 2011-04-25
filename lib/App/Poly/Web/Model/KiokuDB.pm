@@ -1,4 +1,5 @@
 package App::Poly::Web::Model::KiokuDB;
+# ABSTRACT: Cat::M::KiokuDB wrapper
 use Moose;
 
 use App::Poly::Model::KiokuDB;

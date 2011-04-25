@@ -1,4 +1,5 @@
 package App::Poly::Model::KiokuDB;
+# ABSTRACT: KiokuDB model
 use Moose;
 extends 'KiokuX::Model';
 

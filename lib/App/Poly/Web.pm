@@ -1,4 +1,6 @@
 package App::Poly::Web;
+# ABSTRACT: App::Poly cat app
+
 use Moose;
 use namespace::autoclean;
 

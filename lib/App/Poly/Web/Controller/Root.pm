@@ -1,4 +1,5 @@
 package App::Poly::Web::Controller::Root;
+# ABSTRACT: Cat::C::Root
 use Moose;
 use namespace::autoclean;
 

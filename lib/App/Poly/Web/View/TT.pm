@@ -1,4 +1,5 @@
 package App::Poly::Web::View::TT;
+# ABSTRACT: Cat::V::TT
 
 use strict;
 use warnings;

@@ -1,5 +1,5 @@
 package App::Poly::Schema::User;
-
+# ABSTRACT: User object
 use Moose;
 with 'KiokuX::User';
 

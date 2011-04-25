@@ -1,5 +1,5 @@
 package App::Poly::Schema::Account;
-
+# ABSTRACT: Account object
 use Moose;
 
 use App::Poly::Schema::User;
